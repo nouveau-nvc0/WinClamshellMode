@@ -5,27 +5,44 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3.0.0
 
       - name: Build ClamshellMode (Release)
-        run: msbuild ClamshellMode.sln /p:Configuration=Release /p:Platform=x64
+        run: msbuild ClamshellMode.sln /p:Configuration=Release /p:Platform=x64 /m
         timeout-minutes: 30
 
       - name: Build ClamshellMode (Debug)
-        run: msbuild ClamshellMode.sln /p:Configuration=Debug /p:Platform=x64
+        run: msbuild ClamshellMode.sln /p:Configuration=Debug /p:Platform=x64 /m
         timeout-minutes: 30
 
+      # Asset download names are taken from the file name, so rename before uploading.
+      # softprops/action-gh-release >= 2 treats `files` entries as plain globs:
+      # the old "path#Label" syntax silently matched nothing and the release stayed empty.
+      - name: Stage release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item x64/Release/ClamshellMode.exe dist/ClamshellMode-Release.exe
+          Copy-Item x64/Debug/ClamshellMode.exe dist/ClamshellMode-Debug.exe
+          Get-ChildItem dist | Format-Table Name, Length
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.4
         with:
           files: |
-            x64/Release/ClamshellMode.exe#ClamshellMode-Release.exe
-            x64/Debug/ClamshellMode.exe#ClamshellMode-Debug.exe
+            dist/ClamshellMode-Release.exe
+            dist/ClamshellMode-Debug.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true
